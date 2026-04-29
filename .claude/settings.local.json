@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:PATH += \";C:\\\\Program Files\\\\Git\\\\cmd;C:\\\\Program Files\\\\Git\\\\bin\"; cd \"C:\\\\Users\\\\amudathir\\\\OneDrive - housingfinance.co.ug\\\\Desktop\\\\Lush Tea\"; git --version)",
+      "PowerShell(Invoke-WebRequest -Uri \"https://github.com/git-for-windows/git/releases/download/v2.44.0.windows.1/Git-2.44.0-64-bit.exe\" -OutFile \"$env:TEMP\\\\GitInstaller.exe\" -UseBasicParsing; Start-Process \"$env:TEMP\\\\GitInstaller.exe\" -ArgumentList \"/VERYSILENT /NORESTART\" -Wait; $env:PATH += \";C:\\\\Program Files\\\\Git\\\\cmd\"; git --version)"
+    ]
+  }
+}
