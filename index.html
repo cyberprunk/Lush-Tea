@@ -1458,15 +1458,66 @@
         input.value = v;
     }
 
-    function placeOrder(e) {
+    async function placeOrder(e) {
         e.preventDefault();
-        const orderId = 'LT-' + Math.floor(100000 + Math.random() * 900000);
-        document.getElementById('successOrderId').textContent = 'Order #' + orderId;
-        document.getElementById('checkoutFormState').style.display = 'none';
-        document.getElementById('orderSuccess').classList.add('visible');
-        cart = {};
-        updateCartUI();
+        const btn = document.querySelector('.btn-place-order');
+        btn.textContent = 'Processing payment...';
+        btn.disabled    = true;
+
+        const inputs   = document.querySelectorAll('#checkoutForm input, #checkoutForm select');
+        const items    = Object.values(cart);
+        const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+        const delivery = subtotal >= 50000 ? 0 : 5000;
+        const total    = subtotal + delivery;
+        const orderId  = 'LT-' + Math.floor(100000 + Math.random() * 900000);
+
+        const orderData = {
+            orderId,
+            amount:    total,
+            firstName: inputs[0].value,
+            lastName:  inputs[1].value,
+            email:     inputs[2].value,
+            phone:     inputs[3].value,
+            address:   inputs[4].value,
+            city:      inputs[5].value,
+            items:     items.map(i => `${i.name} x${i.qty}`).join(', ')
+        };
+
+        try {
+            const res  = await fetch('/.netlify/functions/pesapal-order', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(orderData)
+            });
+            const data = await res.json();
+
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+            } else {
+                throw new Error(data.error || 'Could not connect to payment gateway.');
+            }
+        } catch (err) {
+            btn.textContent = 'Place Order →';
+            btn.disabled    = false;
+            alert('Payment error: ' + err.message);
+        }
     }
+
+    // Handle Pesapal redirect back after payment
+    window.addEventListener('load', () => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('payment') === 'success') {
+            const ref = params.get('ref') || ('LT-' + Math.floor(100000 + Math.random() * 900000));
+            document.getElementById('successOrderId').textContent = 'Order #' + ref;
+            document.getElementById('checkoutFormState').style.display = 'none';
+            document.getElementById('orderSuccess').classList.add('visible');
+            document.getElementById('checkoutOverlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+            cart = {};
+            updateCartUI();
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    });
 
     // ── NEWSLETTER ──
     function handleSubscribe(e) {
