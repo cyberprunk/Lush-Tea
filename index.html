@@ -1483,6 +1483,12 @@
             items:     items.map(i => `${i.name} x${i.qty}`).join(', ')
         };
 
+        // Save order details to localStorage so we can retrieve after Pesapal redirect
+        localStorage.setItem('lushteaOrder', JSON.stringify({
+            ...orderData, delivery, total,
+            cartItems: items.map(i => ({ name: i.name, qty: i.qty, price: i.price }))
+        }));
+
         try {
             const res  = await fetch('/.netlify/functions/pesapal-order', {
                 method:  'POST',
@@ -1503,19 +1509,75 @@
         }
     }
 
-    // Handle Pesapal redirect back after payment
-    window.addEventListener('load', () => {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('payment') === 'success') {
-            const ref = params.get('ref') || ('LT-' + Math.floor(100000 + Math.random() * 900000));
-            document.getElementById('successOrderId').textContent = 'Order #' + ref;
-            document.getElementById('checkoutFormState').style.display = 'none';
-            document.getElementById('orderSuccess').classList.add('visible');
-            document.getElementById('checkoutOverlay').classList.add('open');
-            document.body.style.overflow = 'hidden';
+    // Handle Pesapal redirect back — verify payment then send email
+    window.addEventListener('load', async () => {
+        const params          = new URLSearchParams(window.location.search);
+        const orderTrackingId = params.get('OrderTrackingId');
+        const ref             = params.get('ref');
+
+        if (params.get('payment') !== 'success' || !orderTrackingId) return;
+
+        // Clean URL immediately
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // Show overlay with verifying message
+        document.getElementById('checkoutFormState').style.display = 'none';
+        document.getElementById('orderSuccess').classList.add('visible');
+        document.getElementById('checkoutOverlay').classList.add('open');
+        document.body.style.overflow = 'hidden';
+        document.querySelector('.success-title').textContent  = 'Verifying Payment...';
+        document.querySelector('.success-sub').textContent    = 'Please wait while we confirm your payment.';
+        document.getElementById('successOrderId').style.display = 'none';
+
+        try {
+            // Step 1 — Verify with Pesapal
+            const verifyRes  = await fetch('/.netlify/functions/pesapal-verify', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ orderTrackingId })
+            });
+            const verifyData = await verifyRes.json();
+
+            if (!verifyData.verified) {
+                document.querySelector('.success-icon').textContent   = '⚠️';
+                document.querySelector('.success-title').textContent  = 'Payment Pending';
+                document.querySelector('.success-sub').textContent    = `Payment status: ${verifyData.status || 'Unknown'}. If you completed payment, please contact us with your order reference.`;
+                document.getElementById('successOrderId').textContent  = 'Ref: ' + (ref || orderTrackingId);
+                document.getElementById('successOrderId').style.display = '';
+                return;
+            }
+
+            // Step 2 — Payment confirmed, show success
+            document.querySelector('.success-icon').textContent      = '🍃';
+            document.querySelector('.success-title').textContent     = 'Order Placed!';
+            document.querySelector('.success-sub').textContent       = 'Your payment was confirmed. We\'ll prepare your Lush Tea with care and have it on its way to you shortly.';
+            document.getElementById('successOrderId').textContent    = 'Order #' + (ref || orderTrackingId);
+            document.getElementById('successOrderId').style.display  = '';
+
+            // Step 3 — Send confirmation email
+            const savedOrder = JSON.parse(localStorage.getItem('lushteaOrder') || '{}');
+            if (savedOrder.email) {
+                await fetch('/.netlify/functions/send-email', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ order: { ...savedOrder, orderId: ref || orderTrackingId } })
+                });
+            }
+
+            // Step 4 — Clear cart and storage
+            localStorage.removeItem('lushteaOrder');
             cart = {};
             updateCartUI();
-            window.history.replaceState({}, document.title, window.location.pathname);
+
+        } catch (err) {
+            document.querySelector('.success-icon').textContent  = '✅';
+            document.querySelector('.success-title').textContent = 'Order Received!';
+            document.querySelector('.success-sub').textContent   = 'Your payment was processed. A confirmation will be sent to your email shortly.';
+            document.getElementById('successOrderId').textContent   = 'Ref: ' + (ref || orderTrackingId);
+            document.getElementById('successOrderId').style.display = '';
+            localStorage.removeItem('lushteaOrder');
+            cart = {};
+            updateCartUI();
         }
     });
 
