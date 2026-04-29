@@ -56,7 +56,7 @@ exports.handler = async (event) => {
 
   const CONSUMER_KEY    = process.env.PESAPAL_CONSUMER_KEY;
   const CONSUMER_SECRET = process.env.PESAPAL_CONSUMER_SECRET;
-  const BASE_URL        = 'https://cybqa.pesapal.com/pesapalv3';
+  const BASE_URL        = 'https://pay.pesapal.com/v3';
   const SITE_URL        = process.env.URL || 'http://localhost:8888';
 
   try {
